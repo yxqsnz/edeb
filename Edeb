@@ -1,0 +1,19 @@
+name="edeb"
+description="Easily create debian packages!"
+version="0.1.0"
+arch=all
+depends=bash
+maintainer="Moizes J. Sousa <yxqsnz@gmail.com>"
+
+sources() {
+  local-add edeb
+}
+
+prepare() {
+  cd $srcdir
+}
+
+install() {
+  mkdir -p  "$pkgdir/usr/bin"
+  mv edeb   "$pkgdir/usr/bin"
+}
