@@ -1,0 +1,23 @@
+name="example-package"
+description="my example package"
+version=0.1.0
+arch=all
+maintainer="Example <me@example.org>"
+builddepends=gcc
+
+sources() {
+  local-add ./src/hello.c
+}
+
+prepare() {
+ cd $srcdir
+}
+
+build() {
+  cc -O2 --lto hello.c -o hello
+}
+
+install() {
+  mkdir -p    $pkgdir/usr/bin
+  mv hello    $pkgdir/usr/bin/hellou
+}

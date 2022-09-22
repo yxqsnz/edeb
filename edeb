@@ -1,0 +1,179 @@
+#!/usr/bin/env bash
+# TODO: Config?
+
+log() {
+  color=
+  reset= 
+  level=$1
+  before= 
+  shift
+
+  if [[ -z "${NO_COLOR}" ]]; then
+    case "${level}" in 
+      error)
+        color="\u001b[31m" ;;
+      help)
+        color="\u001b[36m" 
+        before='  ' ;;
+      info)
+        color="\u001b[32m" ;;
+      debug)
+        color="\u001b[35m"
+        before=' ' ;;
+      warn)
+        color="\u001b[33m" ;;
+    esac
+    reset="\u001b[0m"
+  fi
+
+  echo -e "${before}${color}${level}${reset}: $*"
+
+}
+
+check() {
+  [ -z "$1" ] && log error "Please add a package name!" && exit 1
+  [ -z "$2" ] && log warn  "Using '*No description*' as default package description." && export description="*No description*"
+  [ -z "$3" ] && log warn  "Using 1.0 as default version." && export version=1.0
+  [ -z "$4" ] && log warn  "Using 'Nobody <nobody@penguin.org>' as default maintainer." && export maintainer="Nobody <nobody@penguin.org>"
+  [ -z "$5" ] && log warn  "Using 'all' as default architecture." && export arch=all
+}
+
+build_deb() {
+  edeb=${EDEB_PATH}
+  working_directory=${WORKING_DIRECTORY}
+  name=
+  depends=
+  builddepends=
+  _is_missing_build_deps=false
+  
+  if [ -z "${WORKING_DIRECTORY}" ]; then
+    working_directory=output
+  fi
+
+  [ -d "${working_directory}" ] || mkdir -p "${working_directory}"
+
+
+
+  install() {
+    log error "Please add a 'install' function!"
+    exit 1
+  }
+
+  prepare() { true; }
+  build() { true; }
+
+  [[ -z ${EDEB_PATH} ]] && edeb="./Edeb"
+
+  if ! [ -f "${edeb}" ]; then
+    log error "Can't find Edeb file."
+    log help "Failed to open '${edeb}'"
+    exit 1
+  fi
+  
+  # shellcheck disable=1090 
+  source "${edeb}"
+
+  export srcdir=$working_directory/src
+  pkgdir=$(realpath "$working_directory/${name}-${version}-${arch}")
+  export pkgdir=$pkgdir
+
+  check "$name" "$description" "$version" "$maintainer" "$arch"
+
+  log info "Building ${name}: ${description}"
+
+  for depend in ${builddepends}; do
+    dpkg-query -l "${depend}" >/dev/null 2>/dev/null || {
+      log error "Missing build dependency: ${depend}" 
+      _is_missing_build_deps=true 
+    }
+  done
+
+  if $_is_missing_build_deps; then
+    log error "Missing build dependencies. Exiting."
+    exit 1
+  fi
+  
+  mkdir -p "$srcdir"
+  mkdir -p "$pkgdir"
+
+  log info "Fetching sources..."
+  srcdir=$(realpath $srcdir)
+
+  local-add() {
+    pushd "$(dirname ${edeb})" >/dev/null || exit 1
+    log debug "Fetch $*"
+    cp "$*" "${srcdir}"
+    popd >/dev/null || exit 1 
+  }
+
+  sources
+
+  log info "Running prepare()"
+
+  prepare
+
+  log info "Running build()"
+
+  build
+
+  log info "Running install()"
+
+  install
+
+  log info "Generating debian control file..."
+  
+  mkdir -p "${pkgdir}/DEBIAN"
+
+  cat >"${pkgdir}/DEBIAN/control" <<EOL
+Package: ${name}
+Version: ${version}
+Maintainer: ${maintainer}
+Architecture: ${arch}
+description: ${description}
+Depends: ${depends}
+Build-Depends: ${builddepends}
+EOL
+
+  log info "Generating debian package"
+  dpkg-deb --build "${pkgdir}"
+}
+
+help() {
+	echo "edeb :: easily create debs"
+  echo "    build: Generate .deb file"
+  echo "    -c (--edeb-path): set Edeb file path (defaults: ./Edeb)"
+  echo "    -wd (--)working-directory): set Edeb file path (defaults: ./output)"
+  echo "    -o (--output): sets output deb file"
+  exit 0
+}
+
+for i in "$@"; do
+  case $i in
+    -o=*|--output=*)
+      OUTPUT="${i#*=}"
+      shift 
+      ;;
+    -wd=*|--working-directory)
+      WORKING_DIRECTORY="${i#*=}"
+      shift
+      ;;
+    -c=*|--edeb-file)
+      EDEB_PATH="${i#*=}"
+      shift
+      ;;
+    -h|--help)
+      help 
+      ;;
+
+    build)
+      build_deb
+      ;;
+    *)
+      log error "unknown option $i"
+      exit 1
+      ;;
+    esac
+done
+
+
+[[ -z "$1" ]] && help
