@@ -123,6 +123,11 @@ build_deb() {
   log info "Generating debian control file..."
   
   mkdir -p "${pkgdir}/DEBIAN"
+  
+  _gen_dpkg-deb_depends() {
+    [ -z "${depends}" ] || echo "Depends: ${depends}"
+    [ -z "${builddepends}" ] || echo "Build-Depends: ${builddepends}"
+  }
 
   cat >"${pkgdir}/DEBIAN/control" <<EOL
 Package: ${name}
@@ -130,8 +135,7 @@ Version: ${version}
 Maintainer: ${maintainer}
 Architecture: ${arch}
 description: ${description}
-Depends: ${depends}
-Build-Depends: ${builddepends}
+$(_gen_dpkg-deb_depends)
 EOL
 
   log info "Generating debian package"
