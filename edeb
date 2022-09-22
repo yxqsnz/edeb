@@ -102,7 +102,7 @@ build_deb() {
   local-add() {
     pushd "$(dirname ${edeb})" >/dev/null || exit 1
     log debug "Fetch $*"
-    cp "$*" "${srcdir}"
+    cp "$@" "${srcdir}"
     popd >/dev/null || exit 1 
   }
 
